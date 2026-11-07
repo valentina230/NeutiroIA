@@ -4,8 +4,7 @@ from pathlib import Path
 import pygame
 
 from salto_juego import (
-    JUGADOR_ALTO, JUGADOR_X, OBSTACULO_ALTO,
-    OBSTACULO_ANCHO, SUELO, JuegoSalto,
+    JUGADOR_ALTO, JUGADOR_X, OBSTACULO_ANCHO, SUELO, JuegoSalto,
 )
 from salto_modelo import RedSalto
 
@@ -14,6 +13,11 @@ FONDO = (248, 244, 252)
 TEXTO = (56, 48, 79)
 MORADO = (133, 99, 202)
 VERDE = (74, 168, 126)
+COLORES_OBSTACULO = {"rojo": (219, 122, 117), "morado": (142, 68, 190)}
+
+# Épocas con las que arranca el cerebro, para que salte desde el principio.
+# Con `R` se reinicia sin entrenar y puedes verlo aprender con 1, 2 o 3.
+EPOCAS_INICIALES = 3000
 
 
 def texto(pantalla, fuente, mensaje, x, y, color=TEXTO):
@@ -60,6 +64,13 @@ def ejecutar():
     entrenamiento_continuo = False
     en_ejecucion = True
 
+    pantalla.fill(FONDO)
+    texto(pantalla, fuente_titulo, "Entrenando el cerebro de Neurito...", 250, 300)
+    pygame.display.flip()
+    pygame.event.pump()
+    for _ in range(EPOCAS_INICIALES):
+        red.entrenar_epoca(X, y)
+
     while en_ejecucion:
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -74,6 +85,9 @@ def ejecutar():
                         red.entrenar_epoca(X, y)
                 elif evento.key == pygame.K_3:
                     entrenamiento_continuo = not entrenamiento_continuo
+                elif evento.key == pygame.K_t:
+                    for _ in range(EPOCAS_INICIALES):
+                        red.entrenar_epoca(X, y)
                 elif evento.key == pygame.K_a:
                     automatico = not automatico
                 elif evento.key == pygame.K_SPACE and not automatico:
@@ -88,7 +102,8 @@ def ejecutar():
         if entrenamiento_continuo:
             red.entrenar_epoca(X, y)
 
-        probabilidad = red.probabilidad(juego.distancia, juego.velocidad)
+        probabilidad = red.probabilidad(
+            juego.distancia, juego.velocidad, juego.obstaculo_alto)
         if automatico and probabilidad >= 0.5 and juego.en_suelo:
             juego.saltar()
         juego.actualizar()
@@ -107,10 +122,13 @@ def ejecutar():
         pygame.draw.rect(pantalla, (230, 246, 238), (32, 194, 894, 247), border_radius=15)
         pygame.draw.line(pantalla, VERDE, (32, SUELO), (926, SUELO), 4)
         obstaculo = pygame.Rect(
-            int(juego.obstaculo_x), SUELO - OBSTACULO_ALTO,
-            OBSTACULO_ANCHO, OBSTACULO_ALTO,
+            int(juego.obstaculo_x), SUELO - juego.obstaculo_alto,
+            OBSTACULO_ANCHO, juego.obstaculo_alto,
         )
-        pygame.draw.rect(pantalla, (219, 122, 117), obstaculo, border_radius=5)
+        pygame.draw.rect(
+            pantalla, COLORES_OBSTACULO[juego.tipo], obstaculo, border_radius=5)
+        texto(pantalla, fuente_ayuda,
+              f"Obstáculo: {juego.tipo} ({juego.obstaculo_alto} px)", 48, 204)
 
         rect_mascota = mascota.get_rect(
             center=(JUGADOR_X + 25, int(juego.y) + JUGADOR_ALTO // 2)
@@ -123,7 +141,7 @@ def ejecutar():
         texto(pantalla, fuente, f"Choques: {juego.choques}", 40, 501)
         texto(pantalla, fuente_ayuda, "1: +1 época     2: +100 épocas     3: entrenamiento continuo", 40, 547)
         texto(pantalla, fuente_ayuda, "A: automático/manual    ESPACIO: salto manual    C: reiniciar pista", 40, 577)
-        texto(pantalla, fuente_ayuda, "R: reiniciar cerebro    ESC: salir", 40, 606)
+        texto(pantalla, fuente_ayuda, "R: cerebro sin entrenar    T: entrenar 3000 épocas    ESC: salir", 40, 606)
         texto(pantalla, fuente_ayuda, "EVOLUCIÓN DE LA PÉRDIDA", 585, 453)
         dibujar_grafica(pantalla, red.historial)
 

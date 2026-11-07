@@ -4,13 +4,15 @@ Neurito aprende **cuándo saltar** ante obstáculos que se aproximan con diferen
 
 ## ¿Qué aprende?
 
-La red recibe tres características normalizadas: distancia al obstáculo, velocidad y tiempo estimado hasta alcanzarlo (distancia / velocidad). La última es una característica derivada, no una observación independiente.
+La red recibe cuatro características normalizadas: distancia al obstáculo, velocidad, tiempo estimado hasta alcanzarlo (distancia / velocidad) y la **altura del obstáculo**. El tiempo estimado es una característica derivada, no una observación independiente.
 
-La arquitectura es **3 → 12 → 1**: doce neuronas ocultas con ReLU y una salida con sigmoide. La última devuelve una puntuación entre cero y uno que, con el umbral 0.5, determina si Neurito debe saltar cuando está en el suelo.
+Hay dos obstáculos que aparecen al azar: uno **rojo** (47 px) y uno **morado** (58 px, más alto, con menos margen para saltar).
+
+La arquitectura es **4 → 12 → 1**: doce neuronas ocultas con ReLU y una salida con sigmoide. La última devuelve una puntuación entre cero y uno que, con el umbral 0.5, determina si Neurito debe saltar cuando está en el suelo.
 
 ## ¿Cómo aprende?
 
-Aplicamos **aprendizaje supervisado**, no aprendizaje por refuerzo. Creamos datos sintéticos que incluyen ejemplos donde es conveniente saltar y otros donde debe esperar. Para generar las etiquetas, definimos una ventana de referencia: saltar cuando el tiempo estimado está entre **7 y 13 fotogramas**. No es una regla aprendida por recompensa ni garantiza evitar choques en todas las situaciones.
+Aplicamos **aprendizaje supervisado**, no aprendizaje por refuerzo. Creamos datos sintéticos que incluyen ejemplos donde es conveniente saltar y otros donde debe esperar. Para generar las etiquetas, definimos una ventana de referencia calculada con la física (`ventana_ttc()` en `salto_juego.py`): saltar cuando el tiempo estimado cae en el rango en que Neurito va a estar por encima del obstáculo mientras lo cruza, con un colchón de 2 fotogramas. Esa ventana depende de la altura del obstáculo y de la velocidad (por ejemplo, rojo a 4.5 px/frame: de 6 a 12.9 fotogramas; morado: de 7 a 10.9). No es una regla aprendida por recompensa; si se cambia, no garantiza evitar choques.
 
 La red ajusta sus pesos a partir de la **entropía cruzada binaria**, la **retropropagación** y el **descenso de gradiente**:
 
@@ -27,11 +29,13 @@ Neurito/
 ├── main.py                 # Mascota original: comer, dormir, jugar
 ├── red-sencilla.py         # Ejemplo de una neurona
 ├── salto_modelo.py         # Red neuronal manual y datos de entrenamiento
-├── salto_juego.py          # Física y detección de colisiones
+├── salto_juego.py          # Física, obstáculos (rojo/morado) y colisiones
+├── experimentos.py         # Experimentos con la red de main.py
+├── INFORME.md              # Resultados y explicaciones
 ├── saltar.py               # Juego y visualización del entrenamiento
 ├── GUIA_SALTO.md
 └── assets/
-    └── jugar_1.png        # Reutilizado en el nuevo juego
+    └── *.png              # Imágenes de la mascota
 ```
 
 ## Ejecución
@@ -41,7 +45,7 @@ uv sync
 uv run saltar.py
 ```
 
-No se necesitan dependencias nuevas: se reutilizan NumPy y Pygame.
+No se necesitan dependencias nuevas: se reutilizan NumPy y Pygame. Al abrir, el cerebro se entrena unos segundos (3000 épocas) y Neurito salta solo desde el primer obstáculo.
 
 ## Controles
 
@@ -53,15 +57,16 @@ No se necesitan dependencias nuevas: se reutilizan NumPy y Pygame.
 | `A` | Alternar control automático y manual |
 | `Espacio` | Saltar manualmente |
 | `C` | Reiniciar pista y contadores |
-| `R` | Reiniciar pesos y contadores |
+| `R` | Reiniciar pesos (cerebro sin entrenar) y contadores |
+| `T` | Entrenar 3000 épocas de golpe |
 | `Esc` | Salir |
 
 ## Experimentos
 
-1. Prueba el juego sin entrenar. Anota colisiones y obstáculos esquivados.
+1. Pulsa `R` para dejar el cerebro sin entrenar y prueba el juego. Anota colisiones y obstáculos esquivados.
 2. Entrena de cien en cien épocas; compara la pérdida, la precisión y el comportamiento.
 3. Cambia `ocultas=12` por `ocultas=3` o `ocultas=24`; compara generalización.
 4. Modifica la tasa de aprendizaje `0.8` a `0.01` o `1.2` y estudia la convergencia.
-5. Cambia la ventana de entrenamiento en `etiqueta()` y en la generación de positivos. Comprueba si la política resultante es compatible con la física.
+5. Cambia el `margen` de `ventana_ttc()` (de 2.0 a 0 o a 5) o la altura del morado en `TIPOS_OBSTACULO`. Comprueba si la política resultante sigue siendo compatible con la física.
 
 **Pregunta central:** ¿por qué una red puede clasificar ejemplos con buena precisión y aun así chocar?
