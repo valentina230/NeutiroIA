@@ -9,11 +9,18 @@ JUGADOR_ALTO = 64
 OBSTACULO_ANCHO = 27
 GRAVEDAD = 0.65
 IMPULSO = -12.0
+ANCHO_PISTA = 830  # donde nace el primer obstáculo de cada fila
 
-# Tipos de obstáculo: nombre -> altura en píxeles.
-# El morado es más alto, así que deja menos margen para saltar.
-TIPOS_OBSTACULO = {"rojo": 47, "morado": 58}
+# Tipos de obstáculo: nombre -> altura en píxeles (más alto = menos margen).
+TIPOS_OBSTACULO = {"azul": 36, "rojo": 47, "morado": 58}
 ALTURA_MAX = max(TIPOS_OBSTACULO.values())
+
+# Una «fila» tiene 1, 2 o 3 obstáculos seguidos. Entre uno y otro hay tiempo
+# de sobra para aterrizar y volver a saltar (separación medida en fotogramas).
+TAMANOS_FILA = (1, 2, 3)
+PESOS_FILA = (5, 3, 2)
+SEPARACION_MIN = 48
+SEPARACION_MAX = 70
 
 
 def _alturas_del_salto():
@@ -53,12 +60,41 @@ class JuegoSalto:
         self.choques = 0
         self.reiniciar_pista()
 
-    def nuevo_obstaculo(self):
-        """Coloca un obstáculo al azar (rojo o morado) al borde derecho."""
-        self.tipo = self.azar.choice(list(TIPOS_OBSTACULO))
-        self.obstaculo_alto = TIPOS_OBSTACULO[self.tipo]
-        self.obstaculo_x = 830.0
+    # --- obstáculos -------------------------------------------------------
+    def nueva_fila(self):
+        """Crea una fila de 1 a 3 obstáculos (rojo, azul o morado) al azar."""
+        cantidad = self.azar.choices(TAMANOS_FILA, weights=PESOS_FILA)[0]
+        x = float(ANCHO_PISTA)
+        self.obstaculos = []
+        for i in range(cantidad):
+            tipo = self.azar.choice(list(TIPOS_OBSTACULO))
+            self.obstaculos.append(
+                {"x": x, "tipo": tipo, "alto": TIPOS_OBSTACULO[tipo]})
+            x += self.velocidad * self.azar.uniform(SEPARACION_MIN, SEPARACION_MAX)
 
+    @property
+    def tipo(self):
+        return self.obstaculos[0]["tipo"]
+
+    @property
+    def obstaculo_alto(self):
+        return self.obstaculos[0]["alto"]
+
+    @property
+    def obstaculo_x(self):
+        return self.obstaculos[0]["x"]
+
+    @property
+    def pendientes(self):
+        """Obstáculos que faltan por pasar en la fila actual."""
+        return len(self.obstaculos)
+
+    @property
+    def distancia(self):
+        """Distancia al obstáculo más cercano que aún no se ha pasado."""
+        return max(0.0, self.obstaculo_x - (JUGADOR_X + JUGADOR_ANCHO))
+
+    # --- estado -----------------------------------------------------------
     def reiniciar_pista(self):
         self.y = float(SUELO - JUGADOR_ALTO)
         self.vy = 0.0
@@ -66,16 +102,12 @@ class JuegoSalto:
         self.velocidad = 5.5
         self.terminado = False
         self.pausa_choque = 0
-        self.nuevo_obstaculo()
+        self.nueva_fila()
 
     def reiniciar_todo(self):
         self.esquivados = 0
         self.choques = 0
         self.reiniciar_pista()
-
-    @property
-    def distancia(self):
-        return max(0.0, self.obstaculo_x - (JUGADOR_X + JUGADOR_ANCHO))
 
     def saltar(self):
         if self.en_suelo and not self.terminado:
@@ -99,16 +131,20 @@ class JuegoSalto:
                 self.vy = 0.0
                 self.en_suelo = True
 
-        self.obstaculo_x -= self.velocidad
-        horizontal = (JUGADOR_X < self.obstaculo_x + OBSTACULO_ANCHO
-                      and JUGADOR_X + JUGADOR_ANCHO > self.obstaculo_x)
-        vertical = (self.y + JUGADOR_ALTO > SUELO - self.obstaculo_alto)
-        if horizontal and vertical:
-            self.choques += 1
-            self.terminado = True
-            return
+        for o in self.obstaculos:
+            o["x"] -= self.velocidad
+            horizontal = (JUGADOR_X < o["x"] + OBSTACULO_ANCHO
+                          and JUGADOR_X + JUGADOR_ANCHO > o["x"])
+            vertical = self.y + JUGADOR_ALTO > SUELO - o["alto"]
+            if horizontal and vertical:
+                self.choques += 1
+                self.terminado = True
+                return
 
-        if self.obstaculo_x + OBSTACULO_ANCHO < JUGADOR_X:
+        if self.obstaculos[0]["x"] + OBSTACULO_ANCHO < JUGADOR_X:
+            self.obstaculos.pop(0)
             self.esquivados += 1
-            self.nuevo_obstaculo()
-            self.velocidad = self.azar.uniform(4.5, 8.5)
+            if not self.obstaculos:
+                # La velocidad solo cambia entre filas, no dentro de una.
+                self.velocidad = self.azar.uniform(4.5, 8.5)
+                self.nueva_fila()

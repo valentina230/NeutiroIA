@@ -105,5 +105,18 @@ class RedSalto:
         self.historial.append(float(perdida))
         return float(perdida)
 
+    def entrenar_varias(self, X, y, n, X_prueba=None, y_prueba=None, tope=None):
+        """Entrena hasta `n` épocas; se detiene si la precisión llega al tope.
+
+        Devuelve cuántas épocas entrenó. Con `tope=None` entrena las `n`.
+        """
+        hechas = 0
+        for _ in range(n):
+            if tope is not None and self.precision(X_prueba, y_prueba) >= tope:
+                break
+            self.entrenar_epoca(X, y)
+            hechas += 1
+        return hechas
+
     def precision(self, X, y):
         return float(np.mean((self.adelante(X)[2] >= 0.5) == y))
